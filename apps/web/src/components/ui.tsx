@@ -31,8 +31,8 @@ export function Button({ variant = 'primary', className = '', ...props }: Compon
 export const inputClass =
   'w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100';
 
-export function Input(props: ComponentProps<'input'>) {
-  return <input className={inputClass} {...props} />;
+export function Input({ className = '', ...props }: ComponentProps<'input'>) {
+  return <input className={`${inputClass} ${className}`} {...props} />;
 }
 
 export function Select(props: ComponentProps<'select'>) {

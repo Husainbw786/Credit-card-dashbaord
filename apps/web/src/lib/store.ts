@@ -32,6 +32,10 @@ export interface UserState {
   strategies: Record<string, boolean>;
   /** Seed brands the user removed; not re-added by the catalogue sync. */
   hiddenBrands?: string[];
+  /** Seed offers the user removed; not re-added by the catalogue sync. */
+  hiddenOffers?: string[];
+  /** brandId → ISO date of the last automatic web search. */
+  autoSearch?: Record<string, string>;
 }
 
 export type BackendName = 'postgres' | 'redis' | 'file' | 'temp';

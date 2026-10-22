@@ -54,6 +54,8 @@ export interface Route {
   confidence: Confidence;
   /** Can be executed on the spot (no delayed gift card delivery). */
   instant: boolean;
+  /** Cost computed without a discount number; any real discount makes it cheaper. */
+  discountUnknown: boolean;
 }
 
 export interface FindOptions {
@@ -193,6 +195,7 @@ function buildDirect(ctx: Ctx, strategy: Strategy, my: MyCard, card: CardProduct
     else pay -= saving;
     breakdown.push({ label: `${offer.kind} offer ${offer.pct}%${offer.code ? ` (code ${offer.code})` : ''}`, amount: -saving });
     catches.push(...provenanceCatches(ctx, `Merchant offer "${offer.id}"`, offer));
+    if (offer.unconfirmed) catches.push({ severity: 'medium', message: `This ${offer.kind} offer was found online${offer.verifiedAt ? ` on ${offer.verifiedAt}` : ''}; confirm it applies before paying.` });
   }
   const hop: Hop = { channel, category: brand.category, merchantId: brand.id, amount: pay };
   const reward = computeReward(card, my, hop);
@@ -222,6 +225,7 @@ function buildDirect(ctx: Ctx, strategy: Strategy, my: MyCard, card: CardProduct
     breakdown,
     catches,
     instant: true,
+    discountUnknown: false,
   });
 }
 
@@ -348,8 +352,14 @@ function buildGiftCard(ctx: Ctx, strategy: Strategy, offer: GiftCardOffer, platf
   }
 
   // Offer + redemption catches
-  catches.push(...provenanceCatches(ctx, `${platform.name} ${brand.name} gift card discount`, offer));
-  catches.push(...provenanceCatches(ctx, `${brand.name} gift card redemption rules`, brand.redemption));
+  if (offer.discountUnknown) {
+    catches.push({ severity: 'medium', message: `${brand.name} is listed on ${platform.name} but the current discount has not been checked; cost shown at 0% off. Any discount makes this route cheaper.` });
+  } else {
+    catches.push(...provenanceCatches(ctx, `${platform.name} ${brand.name} gift card discount`, offer));
+    if (offer.unconfirmed) catches.push({ severity: 'medium', message: `${offer.discountPct}% on ${platform.name} was found online${offer.verifiedAt ? ` on ${offer.verifiedAt}` : ''}; confirm it on the platform before buying.` });
+  }
+  // Online redemption of a brand e-gift card is standard; store acceptance is what needs checking.
+  if (intent.channel !== 'online') catches.push(...provenanceCatches(ctx, `${brand.name} gift card redemption rules`, brand.redemption));
   if (intent.channel !== 'online' && brand.redemption.offlineStores === 'select') {
     catches.push({ severity: 'medium', message: `Only select ${brand.name} stores accept gift cards; confirm with this store before buying.` });
   }
@@ -368,7 +378,7 @@ function buildGiftCard(ctx: Ctx, strategy: Strategy, offer: GiftCardOffer, platf
   const piecesText = plan.pieces.length > 1 ? ` as ${plan.pieces.length} cards (${plan.pieces.map(fmtInr).join(' + ')})` : '';
   steps.push({
     n: 1,
-    action: `Buy ${fmtInr(plan.face)} ${brand.name} gift card on ${platform.name}${piecesText} at ${offer.discountPct}% off → pay ${fmtInr(gcPay)} with ${card.name}` + (offer.promoCode ? ` (code ${offer.promoCode})` : ''),
+    action: `Buy ${fmtInr(plan.face)} ${brand.name} gift card on ${platform.name}${piecesText}${offer.discountUnknown ? ' (check the discount there)' : ` at ${offer.discountPct}% off`} → pay ${fmtInr(gcPay)} with ${card.name}` + (offer.promoCode ? ` (code ${offer.promoCode})` : ''),
     detail: gcReward.rule ? `${gcReward.rule.name} → ${fmtInr(gcReward.value)} back` : `no reward (${gcReward.blockedBy})`,
   });
   steps.push({
@@ -385,7 +395,7 @@ function buildGiftCard(ctx: Ctx, strategy: Strategy, offer: GiftCardOffer, platf
   return finalize({
     id: `gc:${offer.id}:${my.id}`,
     strategyId: strategy.id,
-    title: `${platform.name} gift card (${offer.discountPct}% off) paid with ${card.name}`,
+    title: `${platform.name} gift card (${offer.discountUnknown ? 'discount not checked' : `${offer.discountPct}% off`}) paid with ${card.name}`,
     cardId: my.id,
     cardName: card.name,
     platformId: platform.id,
@@ -398,14 +408,17 @@ function buildGiftCard(ctx: Ctx, strategy: Strategy, offer: GiftCardOffer, platf
     breakdown,
     catches,
     instant: offer.delivery === 'instant',
+    discountUnknown: offer.discountUnknown,
   });
 }
 
 function giftCardRoutes(ctx: Ctx, strategy: Strategy): Route[] {
   const { kb, brand, intent } = ctx;
   const out: Route[] = [];
+  const concrete = new Set(kb.giftCardOffers.filter((o) => o.brandId === brand.id && !o.discountUnknown).map((o) => o.platformId));
   for (const offer of kb.giftCardOffers) {
     if (offer.brandId !== brand.id) continue;
+    if (offer.discountUnknown && concrete.has(offer.platformId)) continue;
     const platform = ctx.platformById.get(offer.platformId);
     if (!platform) continue;
     if (offer.validTill && new Date(offer.validTill) < ctx.today) continue;
@@ -443,7 +456,13 @@ export function findRoutes(kb: KnowledgeBase, intent: PurchaseIntent, opts: Find
     if (strategy.kind === 'direct') routes.push(...directRoutes(ctx, strategy));
     else if (strategy.kind === 'gift_card') routes.push(...giftCardRoutes(ctx, strategy));
   }
-  routes.sort((a, b) => a.effectiveCost - b.effectiveCost || a.steps.length - b.steps.length || a.title.localeCompare(b.title));
+  routes.sort(
+    (a, b) =>
+      a.effectiveCost - b.effectiveCost ||
+      Number(b.discountUnknown) - Number(a.discountUnknown) ||
+      a.steps.length - b.steps.length ||
+      a.title.localeCompare(b.title),
+  );
   return opts.topN ? routes.slice(0, opts.topN) : routes;
 }
 

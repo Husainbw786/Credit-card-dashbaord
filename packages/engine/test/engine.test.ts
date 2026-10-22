@@ -110,7 +110,7 @@ describe('caps and flags', () => {
 describe('platform comparison and catches', () => {
   it('prefers the platform with the deeper discount and flags unverified ones', () => {
     const kb = loadKnowledgeBase();
-    kb.giftCardOffers.push({ id: 'magicpin-giva', platformId: 'magicpin', brandId: 'giva', discountPct: 16, feePct: 0, feeFlat: 0, delivery: 'instant' });
+    kb.giftCardOffers.push({ id: 'magicpin-giva', platformId: 'magicpin', brandId: 'giva', discountPct: 16, feePct: 0, feeFlat: 0, delivery: 'instant', source: 'user', unconfirmed: false, discountUnknown: false });
     const routes = findRoutes(kb, { brandId: 'giva', amount: 10_000, channel: 'offline', inStoreNow: false }, { today: TODAY });
     expect(routes[0]!.platformId).toBe('magicpin');
     expect(routes[0]!.effectiveCost).toBe(7980);
@@ -119,7 +119,7 @@ describe('platform comparison and catches', () => {
 
   it('hides delayed-delivery offers when in store now', () => {
     const kb = loadKnowledgeBase();
-    kb.giftCardOffers.push({ id: 'woohoo-giva', platformId: 'woohoo', brandId: 'giva', discountPct: 20, feePct: 0, feeFlat: 0, delivery: 'delayed', verifiedAt: TODAY });
+    kb.giftCardOffers.push({ id: 'woohoo-giva', platformId: 'woohoo', brandId: 'giva', discountPct: 20, feePct: 0, feeFlat: 0, delivery: 'delayed', verifiedAt: TODAY, source: 'user', unconfirmed: false, discountUnknown: false });
     const now = findRoutes(kb, { brandId: 'giva', amount: 10_000, channel: 'offline', inStoreNow: true }, { today: TODAY });
     expect(now.some((r) => r.platformId === 'woohoo')).toBe(false);
     const later = findRoutes(kb, { brandId: 'giva', amount: 10_000, channel: 'offline', inStoreNow: false }, { today: TODAY });
@@ -137,7 +137,7 @@ describe('platform comparison and catches', () => {
 
   it('skips gift cards for online-only brands when buying offline', () => {
     const kb = loadKnowledgeBase();
-    kb.giftCardOffers.push({ id: 'gyftr-myntra', platformId: 'gyftr', brandId: 'myntra', discountPct: 10, feePct: 0, feeFlat: 0, delivery: 'instant', verifiedAt: TODAY });
+    kb.giftCardOffers.push({ id: 'gyftr-myntra', platformId: 'gyftr', brandId: 'myntra', discountPct: 10, feePct: 0, feeFlat: 0, delivery: 'instant', verifiedAt: TODAY, source: 'user', unconfirmed: false, discountUnknown: false });
     const offline = findRoutes(kb, { brandId: 'myntra', amount: 3000, channel: 'offline', inStoreNow: false }, { today: TODAY });
     expect(offline.every((r) => r.strategyId === 'direct')).toBe(true);
     const online = findRoutes(kb, { brandId: 'myntra', amount: 3000, channel: 'online', inStoreNow: false }, { today: TODAY });
@@ -178,5 +178,37 @@ describe('seeded brands and partner rates', () => {
     const swiggy = findRoutes(kb, { brandId: 'swiggy', amount: 1000, channel: 'online', inStoreNow: false }, { today: TODAY });
     expect(swiggy[0]!.cardId).toBe('my-hdfc-swiggy');
     expect(swiggy[0]!.rewardsValue).toBe(100);
+  });
+});
+
+describe('unknown-discount catalogue rows', () => {
+  it("proposes Gyftr + Cashback SBI Card for Domino's online even without a discount number", () => {
+    const kb = loadKnowledgeBase();
+    const routes = findRoutes(kb, { brandId: 'dominos', amount: 700, channel: 'online', inStoreNow: false }, { today: TODAY });
+    const top = routes[0]!;
+    expect(top.strategyId).toBe('gift_card');
+    expect(top.platformId).toBe('gyftr');
+    expect(top.cardId).toBe('my-sbi-cashback');
+    expect(top.discountUnknown).toBe(true);
+    expect(top.effectiveCost).toBe(665); // 0% discount, 5% online cashback
+    expect(top.title).toContain('discount not checked');
+    expect(top.catches.some((c) => c.message.includes('not been checked'))).toBe(true);
+  });
+
+  it('hides the catalogue row once a real discount is known for that platform', () => {
+    const kb = loadKnowledgeBase();
+    kb.giftCardOffers.push({ id: 'gyftr-dominos-live', platformId: 'gyftr', brandId: 'dominos', discountPct: 10, feePct: 0, feeFlat: 0, delivery: 'instant', verifiedAt: TODAY, source: 'auto', unconfirmed: true, discountUnknown: false });
+    const routes = findRoutes(kb, { brandId: 'dominos', amount: 700, channel: 'online', inStoreNow: false }, { today: TODAY });
+    const gyftr = routes.filter((r) => r.platformId === 'gyftr' && r.cardId === 'my-sbi-cashback');
+    expect(gyftr).toHaveLength(1);
+    expect(gyftr[0]!.effectiveCost).toBe(598.5); // 700 × 0.9 × 0.95
+    expect(gyftr[0]!.confidence).toBe('medium');
+    expect(gyftr[0]!.catches.some((c) => c.message.includes('found online'))).toBe(true);
+  });
+
+  it('keeps Giva at 14 routes (no catalogue row for a brand with a real offer)', () => {
+    const kb = loadKnowledgeBase();
+    const routes = findRoutes(kb, { brandId: 'giva', amount: 10_000, channel: 'offline', inStoreNow: false }, { today: TODAY });
+    expect(routes).toHaveLength(14);
   });
 });

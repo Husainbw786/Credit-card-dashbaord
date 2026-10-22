@@ -34,7 +34,10 @@ export default async function OffersPage() {
   const cardName = new Map(kb.cards.map((c) => [c.id, c.name]));
   const giftPlatforms = kb.platforms.filter((p) => p.type === 'gift_card');
   const brands = [...kb.brands].sort((a, b) => a.name.localeCompare(b.name));
-  const offers = [...kb.giftCardOffers].sort((a, b) => (brandName.get(a.brandId) ?? '').localeCompare(brandName.get(b.brandId) ?? '') || b.discountPct - a.discountPct);
+  const byBrand = (a: { brandId: string; discountPct: number }, b: { brandId: string; discountPct: number }) =>
+    (brandName.get(a.brandId) ?? '').localeCompare(brandName.get(b.brandId) ?? '') || b.discountPct - a.discountPct;
+  const offers = kb.giftCardOffers.filter((o) => !o.discountUnknown).sort(byBrand);
+  const listedOnly = kb.giftCardOffers.filter((o) => o.discountUnknown).sort(byBrand);
 
   return (
     <div>
@@ -81,7 +84,10 @@ export default async function OffersPage() {
                     ) : null}
                   </Muted>
                 </div>
-                <VerifiedBadge verifiedAt={o.verifiedAt} />
+                <div className="flex items-center gap-1">
+                  {o.unconfirmed && <Badge tone="medium">found online, unconfirmed</Badge>}
+                  <VerifiedBadge verifiedAt={o.verifiedAt} />
+                </div>
               </div>
               <div className="mt-2 flex flex-wrap items-end gap-2">
                 <form action={setOfferVerified} className="flex items-end gap-2">
@@ -111,6 +117,40 @@ export default async function OffersPage() {
             </Card>
           ))}
         </div>
+      )}
+
+      {listedOnly.length > 0 && (
+        <details className="mt-3 rounded-xl border border-dashed border-zinc-300 p-3 text-sm dark:border-zinc-700">
+          <summary className="cursor-pointer">
+            Listed on a platform, discount not checked yet ({listedOnly.length})
+            <span className="ml-2 text-xs text-zinc-500">the assistant proposes these at 0% off until a real number is known</span>
+          </summary>
+          <ul className="mt-2 grid grid-cols-1 gap-1 sm:grid-cols-2">
+            {listedOnly.map((o) => (
+              <li key={o.id} className="flex items-center justify-between gap-2 rounded-lg bg-zinc-50 px-2 py-1 dark:bg-zinc-800/60">
+                <span>
+                  {brandName.get(o.brandId) ?? o.brandId} <span className="text-zinc-500">on {platformName.get(o.platformId) ?? o.platformId}</span>
+                </span>
+                <span className="flex items-center gap-1">
+                  <form action={setOfferVerified} className="flex items-center gap-1">
+                    <input type="hidden" name="id" value={o.id} />
+                    <input type="hidden" name="verified" value="true" />
+                    <Input name="discountPct" type="number" min={0} max={100} step="0.5" placeholder="%" className="w-16" />
+                    <Button variant="ghost" type="submit" className="px-2 py-1 text-xs">
+                      Set
+                    </Button>
+                  </form>
+                  <form action={deleteGiftCardOffer}>
+                    <input type="hidden" name="id" value={o.id} />
+                    <Button variant="ghost" type="submit" className="px-2 py-1 text-xs">
+                      Remove
+                    </Button>
+                  </form>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
 
       <Card className="mt-3">
@@ -185,6 +225,7 @@ export default async function OffersPage() {
                 </Muted>
               </div>
               <div className="flex items-center gap-2">
+                {o.unconfirmed && <Badge tone="medium">found online, unconfirmed</Badge>}
                 <VerifiedBadge verifiedAt={o.verifiedAt} />
                 <form action={deleteMerchantOffer}>
                   <input type="hidden" name="id" value={o.id} />

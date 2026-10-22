@@ -6,8 +6,12 @@ async function syncSeedBrands(state: UserState): Promise<UserState> {
   const have = new Set(state.brands.map((b) => b.id));
   const hidden = new Set(state.hiddenBrands ?? []);
   const missing = seedKnowledgeBase.brands.filter((b) => !have.has(b.id) && !hidden.has(b.id));
-  if (missing.length === 0) return state;
+  const haveOffers = new Set(state.giftCardOffers.map((o) => o.id));
+  const hiddenOffers = new Set(state.hiddenOffers ?? []);
+  const missingOffers = (seedKnowledgeBase.giftCardOffers ?? []).filter((o) => !haveOffers.has(o.id) && !hiddenOffers.has(o.id));
+  if (missing.length === 0 && missingOffers.length === 0) return state;
   state.brands.push(...structuredClone(missing));
+  state.giftCardOffers.push(...structuredClone(missingOffers));
   await writeState(state);
   return state;
 }

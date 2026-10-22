@@ -178,6 +178,12 @@ export const GiftCardOfferSchema = z.object({
   maxPerMonth: z.number().positive().optional(),
   delivery: z.enum(['instant', 'delayed']).default('instant'),
   validTill: z.string().optional(),
+  /** Where the row came from. 'auto' rows are written by the assistant's web search. */
+  source: z.enum(['seed', 'user', 'auto']).default('seed'),
+  /** Found online and not yet confirmed by the user on the platform. */
+  unconfirmed: z.boolean().default(false),
+  /** Brand is listed on the platform but the current discount has not been checked; discountPct is 0. */
+  discountUnknown: z.boolean().default(false),
 });
 export type GiftCardOffer = z.infer<typeof GiftCardOfferSchema>;
 export type GiftCardOfferInput = z.input<typeof GiftCardOfferSchema>;
@@ -208,6 +214,8 @@ export const MerchantOfferSchema = z.object({
   channels: z.array(ChannelSchema),
   validTill: z.string().optional(),
   code: z.string().optional(),
+  source: z.enum(['seed', 'user', 'auto']).default('seed'),
+  unconfirmed: z.boolean().default(false),
 });
 export type MerchantOffer = z.infer<typeof MerchantOfferSchema>;
 export type MerchantOfferInput = z.input<typeof MerchantOfferSchema>;

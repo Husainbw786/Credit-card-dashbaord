@@ -9,7 +9,7 @@ import {
   type PurchaseIntent,
   type Route,
 } from '@smart-spend/engine';
-import { fuzzyBrand, parseIntent, providerLabel, searchOffersOnline, type OfferSearchFailure, type OfferSearchResult, type ProviderName } from './llm';
+import { activeProvider, fuzzyBrand, parseIntent, providerLabel, searchOffersOnline, type OfferSearchFailure, type OfferSearchResult, type ProviderName } from './llm';
 import { getKnowledgeBase } from './kb';
 import { slug, today, updateState } from './store';
 
@@ -75,8 +75,122 @@ export async function askAssistant(message: string): Promise<RoutesResult> {
   const channel: Channel = parsed.channel ?? brand.defaultChannel ?? (ONLINE_ONLY_CATEGORIES.has(brand.category) ? 'online' : 'offline');
   if (!parsed.channel) notes.push(channel === 'online' ? `Assumed an online order at ${brand.name}; say "in store" if not.` : `Assumed you are paying at a ${brand.name} store; say "online" if not.`);
   const intent = PurchaseIntentSchema.parse({ brandId: brand.id, amount: parsed.amount, channel, inStoreNow: parsed.inStoreNow });
-  const routes = findRoutes(kb, intent);
+  const searched = await ensureFreshOffers(brand.id);
+  notes.push(...searched.notes);
+  const latest = searched.refreshed ? (await getKnowledgeBase()).kb : kb;
+  const routes = findRoutes(latest, intent);
   return { ok: true, parser, parserLabel, brandName: brand.name, intent, routes, notes };
+}
+
+const FRESH_DAYS = 7;
+
+function isFresh(verifiedAt: string | undefined, days = FRESH_DAYS): boolean {
+  if (!verifiedAt) return false;
+  return Date.now() - new Date(verifiedAt).getTime() < days * 86_400_000;
+}
+
+function matchPlatformId(platforms: { id: string; name: string }[], name: string): string | undefined {
+  const n = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+  return platforms.find((p) => p.id.replace(/[^a-z0-9]/g, '') === n || p.name.toLowerCase().replace(/[^a-z0-9]/g, '') === n)?.id;
+}
+
+function matchCardId(cards: { id: string; name: string; issuer: string }[], bank: string, card: string | null): string | undefined {
+  const hay = `${bank} ${card ?? ''}`.toLowerCase();
+  const byName = cards.filter((c) => hay.includes(c.name.toLowerCase().replace(/ credit card$/, '')));
+  if (byName.length === 1) return byName[0]!.id;
+  const byIssuer = cards.filter((c) => hay.includes(c.issuer.toLowerCase().split(' ')[0]!));
+  return byIssuer.length === 1 ? byIssuer[0]!.id : undefined;
+}
+
+/**
+ * If the brand has no gift card discount verified in the last week and the OpenAI
+ * provider is available, search the web once a day and store what was found as
+ * unconfirmed offers, so routes are ranked with real numbers.
+ */
+async function ensureFreshOffers(brandId: string): Promise<{ refreshed: boolean; notes: string[] }> {
+  if (activeProvider() !== 'openai') return { refreshed: false, notes: [] };
+  const { kb, state } = await getKnowledgeBase();
+  const brand = kb.brands.find((b) => b.id === brandId);
+  if (!brand) return { refreshed: false, notes: [] };
+  const hasFresh = kb.giftCardOffers.some((o) => o.brandId === brandId && !o.discountUnknown && isFresh(o.verifiedAt));
+  const todayIso = today();
+  if (hasFresh || state.autoSearch?.[brandId] === todayIso) return { refreshed: false, notes: [] };
+
+  const found = await searchOffersOnline(brandId, kb);
+  await updateState((s) => {
+    s.autoSearch = { ...(s.autoSearch ?? {}), [brandId]: todayIso };
+  });
+  if (!found.ok) return { refreshed: false, notes: [`Tried to look up ${brand.name} discounts online: ${found.error}`] };
+
+  const platforms = kb.platforms.filter((p) => p.type === 'gift_card').map((p) => ({ id: p.id, name: p.name }));
+  const myCards = kb.myCards
+    .map((m) => kb.cards.find((c) => c.id === m.cardProductId))
+    .filter((c): c is NonNullable<typeof c> => Boolean(c))
+    .map((c) => ({ id: c.id, name: c.name, issuer: c.issuer }));
+  const added: string[] = [];
+  const skipped: string[] = [];
+  await updateState((s) => {
+    for (const g of found.result.giftCards) {
+      const platformId = matchPlatformId(platforms, g.platform);
+      if (!platformId || g.discountPct === null || g.discountPct <= 0) {
+        skipped.push(`${g.platform}${g.discountPct === null ? ' (no % stated)' : ''}`);
+        continue;
+      }
+      const id = `auto-${platformId}-${brandId}`;
+      const existingIdx = s.giftCardOffers.findIndex((o) => o.id === id);
+      const userRow = s.giftCardOffers.find((o) => o.platformId === platformId && o.brandId === brandId && o.source === 'user' && isFresh(o.verifiedAt, 14));
+      if (userRow) continue; // keep what the user entered recently
+      const row = {
+        id,
+        platformId,
+        brandId,
+        discountPct: g.discountPct,
+        promoCode: g.promoCode ?? undefined,
+        delivery: 'instant' as const,
+        source: 'auto' as const,
+        unconfirmed: true,
+        discountUnknown: false,
+        verifiedAt: todayIso,
+        sourceUrl: g.sourceUrl,
+        sourceNote: `Found by ${providerLabel()} web search (${g.confidence} confidence)${g.cardRequired ? `; needs ${g.cardRequired}` : ''}${g.notes ? `; ${g.notes}` : ''}`,
+      };
+      if (existingIdx >= 0) s.giftCardOffers[existingIdx] = row;
+      else s.giftCardOffers.push(row);
+      added.push(`${platforms.find((p) => p.id === platformId)?.name} ${g.discountPct}%`);
+    }
+    for (const [i, o] of found.result.bankOffers.entries()) {
+      const cardProductId = matchCardId(myCards, o.bank, o.card);
+      if (!cardProductId || o.pct <= 0) continue;
+      const id = `auto-mo-${brandId}-${cardProductId}-${i}`;
+      const channels = o.channel === 'both' ? (['online', 'offline'] as const) : ([o.channel] as const);
+      const row = {
+        id,
+        brandId,
+        cardProductId,
+        kind: o.kind,
+        pct: o.pct,
+        cap: o.cap ?? undefined,
+        minSpend: o.minSpend ?? undefined,
+        channels: [...channels],
+        code: o.code ?? undefined,
+        validTill: o.validTill ?? undefined,
+        source: 'auto' as const,
+        unconfirmed: true,
+        verifiedAt: todayIso,
+        sourceUrl: o.sourceUrl,
+        sourceNote: `Found by ${providerLabel()} web search (${o.confidence} confidence)${o.notes ? `; ${o.notes}` : ''}`,
+      };
+      const idx = s.merchantOffers.findIndex((m) => m.id === id);
+      if (idx >= 0) s.merchantOffers[idx] = row;
+      else s.merchantOffers.push(row);
+      added.push(`${o.bank} ${o.pct}% ${o.kind}`);
+    }
+  });
+  revalidateAll();
+  const notes: string[] = [];
+  if (added.length) notes.push(`Checked online just now and found: ${added.join(', ')}. Marked unconfirmed until you verify on the platform (Offers page).`);
+  else notes.push(`Checked online just now; no current gift card discount found for ${brand.name}${skipped.length ? ` (${skipped.join(', ')} listed without a number)` : ''}.`);
+  return { refreshed: added.length > 0, notes };
 }
 
 /** Live web research (OpenAI web_search) for a brand's gift card and bank offers. */
@@ -236,6 +350,7 @@ export async function addGiftCardOffer(formData: FormData): Promise<void> {
       minAmount: num('minAmount'),
       maxAmount: num('maxAmount'),
       feePct: num('feePct') ?? 0,
+      source: 'user',
       verifiedAt: today(),
       sourceUrl: String(formData.get('sourceUrl') ?? '').trim() || undefined,
       sourceNote: String(formData.get('sourceNote') ?? '').trim() || 'Entered by user',
@@ -252,6 +367,11 @@ export async function setOfferVerified(formData: FormData): Promise<void> {
     const o = s.giftCardOffers.find((x) => x.id === id);
     if (!o) return;
     o.verifiedAt = verified ? today() : undefined;
+    if (verified) {
+      o.unconfirmed = false;
+      o.discountUnknown = false;
+      o.source = 'user';
+    }
     if (verified && Number.isFinite(discount) && discount >= 0 && discount <= 100) o.discountPct = discount;
   });
   revalidateAll();
@@ -261,6 +381,7 @@ export async function deleteGiftCardOffer(formData: FormData): Promise<void> {
   const id = String(formData.get('id') ?? '');
   await updateState((s) => {
     s.giftCardOffers = s.giftCardOffers.filter((o) => o.id !== id);
+    s.hiddenOffers = [...new Set([...(s.hiddenOffers ?? []), id])];
   });
   revalidateAll();
 }
@@ -289,6 +410,7 @@ export async function addMerchantOffer(formData: FormData): Promise<void> {
       channels: channels.length ? channels : ['online', 'offline'],
       code: String(formData.get('code') ?? '').trim() || undefined,
       validTill: String(formData.get('validTill') ?? '').trim() || undefined,
+      source: 'user',
       verifiedAt: today(),
       sourceUrl: String(formData.get('sourceUrl') ?? '').trim() || undefined,
       sourceNote: String(formData.get('sourceNote') ?? '').trim() || 'Entered by user',
