@@ -17,6 +17,8 @@ export type RoutesResult =
   | { ok: true; brandName: string; intent: PurchaseIntent; routes: Route[]; parser?: ProviderName; parserLabel?: string; notes: string[] }
   | { ok: false; error: string; parser?: ProviderName; parserLabel?: string; notes: string[] };
 
+const ONLINE_ONLY_CATEGORIES = new Set<Category>(['food_delivery', 'travel']);
+
 function revalidateAll() {
   for (const p of ['/', '/cards', '/offers', '/strategies']) revalidatePath(p);
 }
@@ -39,24 +41,39 @@ export async function askAssistant(message: string): Promise<RoutesResult> {
   const parserLabel = parser === 'local' ? 'the local parser' : providerLabel();
   const notes: string[] = [];
   if (warning) notes.push(warning);
-  const brand = parsed.brandQuery ? fuzzyBrand(kb, parsed.brandQuery) : undefined;
+  let brand = parsed.brandQuery ? fuzzyBrand(kb, parsed.brandQuery) : undefined;
+  if (!brand && parsed.brandQuery) {
+    // New merchant: add it with what we know and keep going; the user can correct it on the Offers page.
+    const name = parsed.brandQuery.trim();
+    const id = slug(name) || `brand-${Date.now().toString(36)}`;
+    const category: Category = parsed.category ?? 'general';
+    const onlineOnly = ONLINE_ONLY_CATEGORIES.has(category);
+    await updateState((s) => {
+      if (s.brands.some((b) => b.id === id)) return;
+      s.brands.push({
+        id,
+        name,
+        category,
+        acceptsUpi: !onlineOnly,
+        defaultChannel: onlineOnly ? 'online' : 'offline',
+        redemption: { online: true, offlineStores: onlineOnly ? 'none' : 'select', partial: true, notes: 'Added automatically from a shopping request; verify gift card acceptance.' },
+      });
+    });
+    const fresh = await getKnowledgeBase();
+    kb.brands.splice(0, kb.brands.length, ...fresh.kb.brands);
+    brand = kb.brands.find((b) => b.id === id);
+    notes.push(`Added "${name}" as a new ${category.replace('_', ' ')} brand. Fix the category or gift card rules on the Offers page if that is wrong.`);
+    revalidateAll();
+  }
   if (!brand) {
-    const known = kb.brands.map((b) => b.name).join(', ');
-    return {
-      ok: false,
-      parser,
-      parserLabel,
-      notes,
-      error: parsed.brandQuery
-        ? `I don't know "${parsed.brandQuery}" yet. Add it on the Offers page, or pick one of: ${known}.`
-        : `Which shop or brand? I know: ${known}.`,
-    };
+    const known = kb.brands.slice(0, 12).map((b) => b.name).join(', ');
+    return { ok: false, parser, parserLabel, notes, error: `Which shop or brand? For example: ${known}…` };
   }
   if (!parsed.amount) {
     return { ok: false, parser, parserLabel, notes, error: `How much is the bill at ${brand.name}?` };
   }
-  const channel: Channel = parsed.channel ?? 'offline';
-  if (!parsed.channel) notes.push('Assumed you are paying at a physical store; say "online" if not.');
+  const channel: Channel = parsed.channel ?? brand.defaultChannel ?? (ONLINE_ONLY_CATEGORIES.has(brand.category) ? 'online' : 'offline');
+  if (!parsed.channel) notes.push(channel === 'online' ? `Assumed an online order at ${brand.name}; say "in store" if not.` : `Assumed you are paying at a ${brand.name} store; say "online" if not.`);
   const intent = PurchaseIntentSchema.parse({ brandId: brand.id, amount: parsed.amount, channel, inStoreNow: parsed.inStoreNow });
   const routes = findRoutes(kb, intent);
   return { ok: true, parser, parserLabel, brandName: brand.name, intent, routes, notes };
@@ -189,6 +206,7 @@ export async function deleteBrand(formData: FormData): Promise<void> {
   const id = String(formData.get('id') ?? '');
   await updateState((s) => {
     s.brands = s.brands.filter((b) => b.id !== id);
+    s.hiddenBrands = [...new Set([...(s.hiddenBrands ?? []), id])];
     s.giftCardOffers = s.giftCardOffers.filter((o) => o.brandId !== id);
     s.merchantOffers = s.merchantOffers.filter((o) => o.brandId !== id);
   });

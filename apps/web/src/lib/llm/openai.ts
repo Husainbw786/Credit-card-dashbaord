@@ -3,6 +3,7 @@ import { zodTextFormat } from 'openai/helpers/zod';
 import type { ReasoningEffort } from 'openai/resources/shared';
 import type { Brand, KnowledgeBase } from '@smart-spend/engine';
 import {
+  CATEGORY_VALUES,
   OfferSearchSchema,
   ParsedIntentSchema,
   type Citation,
@@ -45,7 +46,8 @@ export async function parseIntentOpenAI(message: string, kb: KnowledgeBase): Pro
       'brandQuery: the matching known brand name, else the merchant named in the message, else null. ' +
       'amount: the bill in rupees as a number ("12k" = 12000, "1.5 lakh" = 150000), else null. ' +
       'channel: "offline" for a physical store/showroom/shop, "online" for a website or app, "upi" only if they say they will pay by UPI, null if unclear. ' +
-      'inStoreNow: true only if they are at the store right now.',
+      'inStoreNow: true only if they are at the store right now. ' +
+      'category: the merchant category from this list that fits the brand best: ' + CATEGORY_VALUES.join(', ') + '; null only if you cannot tell.',
     input: message,
     text: { format: zodTextFormat(ParsedIntentSchema, 'purchase_intent') },
   });

@@ -161,3 +161,22 @@ describe('platform comparison and catches', () => {
     expect(capped.youPay).toBe(5000 * 0.87 + 3000);
   });
 });
+
+describe('seeded brands and partner rates', () => {
+  it('parses the seed and keeps brand ids unique', () => {
+    const kb = loadKnowledgeBase();
+    const ids = kb.brands.map((b) => b.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids.length).toBeGreaterThan(40);
+  });
+
+  it("gives SimplyCLICK 10X on Domino's online and Swiggy HDFC 10% on Swiggy", () => {
+    const kb = loadKnowledgeBase();
+    const dominos = findRoutes(kb, { brandId: 'dominos', amount: 700, channel: 'online', inStoreNow: false }, { today: TODAY });
+    const sc = dominos.find((r) => r.cardId === 'my-sbi-simplyclick')!;
+    expect(sc.rewardsValue).toBe(17.5); // 10 pts per ₹100 × ₹0.25
+    const swiggy = findRoutes(kb, { brandId: 'swiggy', amount: 1000, channel: 'online', inStoreNow: false }, { today: TODAY });
+    expect(swiggy[0]!.cardId).toBe('my-hdfc-swiggy');
+    expect(swiggy[0]!.rewardsValue).toBe(100);
+  });
+});

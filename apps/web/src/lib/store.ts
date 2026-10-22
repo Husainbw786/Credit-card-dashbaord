@@ -30,6 +30,8 @@ export interface UserState {
   merchantOffers: MerchantOfferInput[];
   /** enabled flag per strategy id */
   strategies: Record<string, boolean>;
+  /** Seed brands the user removed; not re-added by the catalogue sync. */
+  hiddenBrands?: string[];
 }
 
 export type BackendName = 'postgres' | 'redis' | 'file' | 'temp';

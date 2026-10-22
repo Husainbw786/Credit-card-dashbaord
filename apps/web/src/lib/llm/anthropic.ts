@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import type { KnowledgeBase } from '@smart-spend/engine';
-import { ParsedIntentSchema, type ParsedIntent } from './types';
+import { CATEGORY_VALUES, ParsedIntentSchema, type ParsedIntent } from './types';
 
 /** Claude via the Anthropic SDK; used only when LLM_PROVIDER=anthropic or no OpenAI key is set. */
 export const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-opus-5-5';
@@ -23,7 +23,8 @@ export async function parseIntentAnthropic(message: string, kb: KnowledgeBase): 
       'brandQuery: the matching known brand name, else the merchant named in the message, else null. ' +
       'amount: the bill in rupees as a number ("12k" = 12000, "1.5 lakh" = 150000), else null. ' +
       'channel: "offline" for a physical store/showroom/shop, "online" for a website or app, "upi" only if they say they will pay by UPI, null if unclear. ' +
-      'inStoreNow: true only if they are at the store right now.',
+      'inStoreNow: true only if they are at the store right now. ' +
+      'category: the merchant category from this list that fits the brand best: ' + CATEGORY_VALUES.join(', ') + '; null only if you cannot tell.',
     messages: [{ role: 'user', content: message }],
   });
   if (response.stop_reason === 'refusal') return null;

@@ -1,4 +1,7 @@
 import { z } from 'zod/v4';
+import { CategorySchema } from '@smart-spend/engine';
+
+export const CATEGORY_VALUES = CategorySchema.options;
 
 export const ParsedIntentSchema = z.object({
   /** Brand name as written in the known list, or the merchant named in the message, or null. */
@@ -8,6 +11,8 @@ export const ParsedIntentSchema = z.object({
   channel: z.enum(['online', 'offline', 'upi']).nullable(),
   /** True when the user is physically at the store right now. */
   inStoreNow: z.boolean(),
+  /** Merchant category, used when the brand is new to the app. */
+  category: z.enum(CATEGORY_VALUES).nullable(),
 });
 export type ParsedIntent = z.infer<typeof ParsedIntentSchema>;
 

@@ -155,6 +155,8 @@ export const BrandSchema = z.object({
   category: CategorySchema,
   acceptsUpi: z.boolean().default(true),
   aliases: z.array(z.string()).default([]),
+  /** Channel assumed when the user does not say where they are buying. */
+  defaultChannel: ChannelSchema.optional(),
   redemption: RedemptionSchema,
 });
 export type Brand = z.infer<typeof BrandSchema>;
