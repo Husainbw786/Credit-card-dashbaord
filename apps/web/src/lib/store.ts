@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { Redis } from '@upstash/redis';
+import { Pool } from 'pg';
 import {
   seedKnowledgeBase,
   type BrandInput,
@@ -12,11 +13,13 @@ import {
 } from '@smart-spend/engine';
 
 /**
- * User-editable state is one JSON document. It lives in Upstash Redis when the
- * REST credentials are set (Vercel Marketplace "Upstash for Redis" or any Upstash
- * database), otherwise in a JSON file. On a read-only filesystem such as Vercel's
- * serverless runtime the file falls back to the OS temp directory, which does not
- * survive redeploys; the UI shows a notice in that case.
+ * User-editable state is one JSON document. Backend is picked from the environment:
+ *   1. Postgres when DATABASE_URL or POSTGRES_URL is set (Neon, Supabase, Vercel
+ *      Postgres, Railway, local). One table, one row.
+ *   2. Upstash Redis when its REST credentials are set.
+ *   3. A JSON file otherwise. On a read-only filesystem such as Vercel's serverless
+ *      runtime the file falls back to the OS temp directory, which does not survive
+ *      redeploys; the UI shows a notice in that case.
  */
 export interface UserState {
   version: 1;
@@ -29,7 +32,7 @@ export interface UserState {
   strategies: Record<string, boolean>;
 }
 
-export type BackendName = 'redis' | 'file' | 'temp';
+export type BackendName = 'postgres' | 'redis' | 'file' | 'temp';
 
 interface Backend {
   name: BackendName;
@@ -39,6 +42,54 @@ interface Backend {
 }
 
 const REDIS_KEY = 'smart-spend:user-state';
+const PG_KEY = 'user-state';
+const PG_TABLE = 'smart_spend_state';
+
+function postgresUrl(): string | undefined {
+  return process.env.DATABASE_URL || process.env.POSTGRES_URL || undefined;
+}
+
+function needsSsl(url: string): boolean {
+  if (process.env.PGSSL === 'false') return false;
+  if (/sslmode=disable/i.test(url)) return false;
+  try {
+    const host = new URL(url).hostname;
+    return !(host === 'localhost' || host === '127.0.0.1' || host === '::1');
+  } catch {
+    return true;
+  }
+}
+
+function postgresBackend(url: string): Backend {
+  const pool = new Pool({
+    connectionString: url,
+    max: 2,
+    ssl: needsSsl(url) ? { rejectUnauthorized: false } : undefined,
+  });
+  let ready: Promise<unknown> | undefined;
+  const init = () =>
+    (ready ??= pool.query(
+      `CREATE TABLE IF NOT EXISTS ${PG_TABLE} (key TEXT PRIMARY KEY, value JSONB NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT now())`,
+    ));
+  return {
+    name: 'postgres',
+    persistent: true,
+    async read() {
+      await init();
+      const r = await pool.query<{ value: unknown }>(`SELECT value FROM ${PG_TABLE} WHERE key = $1`, [PG_KEY]);
+      const row = r.rows[0];
+      return row ? JSON.stringify(row.value) : null;
+    },
+    async write(json) {
+      await init();
+      await pool.query(
+        `INSERT INTO ${PG_TABLE} (key, value, updated_at) VALUES ($1, $2::jsonb, now())
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+        [PG_KEY, json],
+      );
+    },
+  };
+}
 
 function redisCredentials(): { url: string; token: string } | undefined {
   const url = process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL;
@@ -85,6 +136,8 @@ function redisBackend(creds: { url: string; token: string }): Backend {
 let active: Backend | undefined;
 
 function primaryBackend(): Backend {
+  const pg = postgresUrl();
+  if (pg) return postgresBackend(pg);
   const creds = redisCredentials();
   if (creds) return redisBackend(creds);
   const file = process.env.SMART_SPEND_DATA_FILE ?? path.join(process.cwd(), 'data', 'user-state.json');

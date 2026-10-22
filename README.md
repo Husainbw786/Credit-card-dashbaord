@@ -26,10 +26,15 @@ parsing only. With no key, a local rule-based parser is used and web search is o
 
 1. Import the repo; set **Root Directory** to `apps/web` (the monorepo root is used for
    install automatically).
-2. Add **Upstash for Redis** from the Vercel Marketplace (Storage tab). It sets
-   `KV_REST_API_URL` / `KV_REST_API_TOKEN`, which the app uses to persist your cards,
-   offers and brands. Without it the app still runs, but edits live in the function's
-   temp directory and reset on redeploy; a banner says so.
+2. Add a database from the Storage tab so your cards, offers and brands persist.
+   Either works, Postgres is recommended:
+   - **Neon (Postgres)**: sets `DATABASE_URL` automatically. Any other Postgres
+     (Supabase, Railway, your own) works too; paste its connection string as
+     `DATABASE_URL`. The app creates its one table on first use.
+   - **Upstash for Redis**: sets `KV_REST_API_URL` / `KV_REST_API_TOKEN`.
+
+   Without a database the app still runs, but edits live in the function's temp
+   directory and reset on redeploy; a banner says so.
 3. Add `OPENAI_API_KEY` (and optionally `OPENAI_MODEL`, `OPENAI_REASONING_EFFORT`).
 4. Redeploy.
 
@@ -47,9 +52,9 @@ parsing only. With no key, a local rule-based parser is used and web search is o
   - **Strategies** – toggle payment patterns on and off.
 
 User-editable state (wallet, offers, brands, strategy toggles) is one JSON document:
-in Upstash Redis when its REST credentials are set, otherwise in
-`apps/web/data/user-state.json` (override with `SMART_SPEND_DATA_FILE`), created from
-the engine seed on first run. The card catalogue and platforms stay in
+in Postgres when `DATABASE_URL` is set, else in Upstash Redis when its REST credentials
+are set, else in `apps/web/data/user-state.json` (override with
+`SMART_SPEND_DATA_FILE`), created from the engine seed on first run. The card catalogue and platforms stay in
 `packages/engine/src/data`.
 
 ## Status
