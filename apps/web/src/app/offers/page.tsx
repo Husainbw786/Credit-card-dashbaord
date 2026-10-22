@@ -9,6 +9,8 @@ import {
   setOfferVerified,
 } from '@/lib/actions';
 import { getKnowledgeBase } from '@/lib/kb';
+import { activeProvider, providerLabel } from '@/lib/llm';
+import { OfferLookup } from '@/components/offer-lookup';
 import { Badge, Button, Card, Field, H1, H2, Input, Muted, Select } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
@@ -39,6 +41,18 @@ export default async function OffersPage() {
       <H1>Offers</H1>
       <Muted className="mt-1">Gift card discounts change weekly. Enter what you see on each platform; the engine compares them per brand.</Muted>
 
+      <H2>Find discounts online</H2>
+      <OfferLookup
+        brands={brands.map((b) => ({ id: b.id, name: b.name }))}
+        platforms={giftPlatforms.map((p) => ({ id: p.id, name: p.name }))}
+        cards={kb.myCards
+          .map((m) => kb.cards.find((c) => c.id === m.cardProductId))
+          .filter((c): c is NonNullable<typeof c> => Boolean(c))
+          .map((c) => ({ id: c.id, name: c.name, issuer: c.issuer }))}
+        searchAvailable={activeProvider() === 'openai'}
+        providerLabel={providerLabel()}
+      />
+
       <H2>Gift card discounts</H2>
       {offers.length === 0 ? (
         <Muted>No gift card offers yet.</Muted>
@@ -57,6 +71,14 @@ export default async function OffersPage() {
                     {o.promoCode ? ` · code ${o.promoCode}` : ''}
                     {o.maxPerMonth ? ` · max ₹${o.maxPerMonth}/month` : ''}
                     {o.sourceNote ? ` · ${o.sourceNote}` : ''}
+                    {o.sourceUrl ? (
+                      <>
+                        {' · '}
+                        <a href={o.sourceUrl} target="_blank" rel="noreferrer" className="underline">
+                          source
+                        </a>
+                      </>
+                    ) : null}
                   </Muted>
                 </div>
                 <VerifiedBadge verifiedAt={o.verifiedAt} />

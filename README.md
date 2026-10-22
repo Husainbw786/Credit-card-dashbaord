@@ -16,8 +16,22 @@ npm run route -- --brand giva --amount 10000 --channel offline --in-store   # CL
 ```
 
 Optional: copy `apps/web/.env.example` to `apps/web/.env.local` and set
-`ANTHROPIC_API_KEY` to let the shop assistant parse free text with Claude. Without a
-key it uses a local rule-based parser (brand name, amount, store/online, "I'm at").
+`OPENAI_API_KEY`. The shop assistant then parses free text with OpenAI's Responses API
+(model `gpt-6.1-sol` by default, `OPENAI_MODEL` to change) and the "Search the web"
+button finds live gift card discounts and bank offers for a brand, with source links,
+for you to accept into the Offers table. `ANTHROPIC_API_KEY` alone enables Claude for
+parsing only. With no key, a local rule-based parser is used and web search is off.
+
+## Deploy on Vercel
+
+1. Import the repo; set **Root Directory** to `apps/web` (the monorepo root is used for
+   install automatically).
+2. Add **Upstash for Redis** from the Vercel Marketplace (Storage tab). It sets
+   `KV_REST_API_URL` / `KV_REST_API_TOKEN`, which the app uses to persist your cards,
+   offers and brands. Without it the app still runs, but edits live in the function's
+   temp directory and reset on redeploy; a banner says so.
+3. Add `OPENAI_API_KEY` (and optionally `OPENAI_MODEL`, `OPENAI_REASONING_EFFORT`).
+4. Redeploy.
 
 ## Layout
 
@@ -32,9 +46,10 @@ key it uses a local rule-based parser (brand name, amount, store/online, "I'm at
     delete), bank and merchant offers, brands with redemption rules.
   - **Strategies** – toggle payment patterns on and off.
 
-User-editable state (wallet, offers, brands, strategy toggles) is stored in
-`apps/web/data/user-state.json`, created from the engine seed on first run. Override the
-path with `SMART_SPEND_DATA_FILE`. The card catalogue and platforms stay in
+User-editable state (wallet, offers, brands, strategy toggles) is one JSON document:
+in Upstash Redis when its REST credentials are set, otherwise in
+`apps/web/data/user-state.json` (override with `SMART_SPEND_DATA_FILE`), created from
+the engine seed on first run. The card catalogue and platforms stay in
 `packages/engine/src/data`.
 
 ## Status

@@ -4,12 +4,21 @@ import { useState, useTransition } from 'react';
 import type { Channel } from '@smart-spend/engine';
 import { askAssistant, computeRoutes, type RoutesResult } from '@/lib/actions';
 import { inr } from '@/lib/format';
+import { OfferLookup, type LookupOption } from './offer-lookup';
 import { RouteCard } from './route-card';
 import { Button, Card, Field, Input, Muted, Select } from './ui';
 
 type Mode = 'ask' | 'form';
 
-export function ShopAssistant({ brands }: { brands: { id: string; name: string }[] }) {
+interface Props {
+  brands: LookupOption[];
+  platforms: LookupOption[];
+  cards: { id: string; name: string; issuer: string }[];
+  searchAvailable: boolean;
+  providerLabel: string;
+}
+
+export function ShopAssistant({ brands, platforms, cards, searchAvailable, providerLabel }: Props) {
   const [mode, setMode] = useState<Mode>('ask');
   const [message, setMessage] = useState('');
   const [brandId, setBrandId] = useState(brands[0]?.id ?? '');
@@ -121,7 +130,7 @@ export function ShopAssistant({ brands }: { brands: { id: string; name: string }
             {result.notes.map((n, i) => (
               <Muted key={i}>{n}</Muted>
             ))}
-            {result.parser && <Muted>Parsed by {result.parser === 'claude' ? 'Claude' : 'the local parser'}.</Muted>}
+            {result.parserLabel && <Muted>Parsed by {result.parserLabel}.</Muted>}
           </div>
           {visible.length === 0 && <Muted>No routes found. Add a gift card offer or a card first.</Muted>}
           {visible.map((r, i) => (
@@ -132,6 +141,17 @@ export function ShopAssistant({ brands }: { brands: { id: string; name: string }
               {showAll ? 'Show top 3 only' : `Show all ${result.routes.length} routes`}
             </Button>
           )}
+          {!result.routes.some((r) => r.strategyId === 'gift_card') && <Muted>No gift card discount is known for {result.brandName} yet. Search the web below or add one on the Offers page.</Muted>}
+          <OfferLookup
+            key={result.intent.brandId}
+            brands={brands}
+            platforms={platforms}
+            cards={cards}
+            initialBrandId={result.intent.brandId}
+            fixedBrand
+            searchAvailable={searchAvailable}
+            providerLabel={providerLabel}
+          />
         </section>
       )}
     </div>

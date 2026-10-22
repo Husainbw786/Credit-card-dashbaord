@@ -259,12 +259,16 @@ Deliverable: offers and perks stay current without you re-typing them.
   exclusions, platform comparison, denominations) and the CLI.
 - Research notes and open questions per card: `packages/engine/SOURCES.md`.
 - **Phase 1: done.** `apps/web` is a Next.js 15 app with the shop assistant (free
-  text parsed by Claude when a key is set, local parser otherwise, plus a structured
-  form), route cards with steps, catches, confidence and math, a cards page with cap
-  and flag tracking and a catalogue, an offers page for gift card and merchant offers
-  and brands, and a strategies page. State is a JSON file for now (Postgres in Phase 2).
+  text parsed by OpenAI's Responses API, model `gpt-6.1-sol`, with Claude or a local
+  parser as fallbacks, plus a structured form), route cards with steps, catches,
+  confidence and math, a cards page with cap and flag tracking and a catalogue, an
+  offers page for gift card and merchant offers and brands, a strategies page, and a
+  "search the web" action that uses OpenAI's built-in web search to find live gift
+  card discounts and bank offers for a brand, which you accept into the offers table.
+  State is one JSON document in Upstash Redis when deployed (temp-file fallback with a
+  banner otherwise) or a local file in development.
 - Next: Phase 2 (scheduled discount fetching, LLM extraction of card terms,
-  transaction log, hosted database).
+  transaction log).
 
 ## 8. What I need from you
 

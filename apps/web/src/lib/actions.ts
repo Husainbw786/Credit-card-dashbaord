@@ -9,13 +9,13 @@ import {
   type PurchaseIntent,
   type Route,
 } from '@smart-spend/engine';
-import { fuzzyBrand, parseIntent, type Parser } from './assistant';
+import { fuzzyBrand, parseIntent, providerLabel, searchOffersOnline, type OfferSearchFailure, type OfferSearchResult, type ProviderName } from './llm';
 import { getKnowledgeBase } from './kb';
 import { slug, today, updateState } from './store';
 
 export type RoutesResult =
-  | { ok: true; brandName: string; intent: PurchaseIntent; routes: Route[]; parser?: Parser; notes: string[] }
-  | { ok: false; error: string; parser?: Parser; notes: string[] };
+  | { ok: true; brandName: string; intent: PurchaseIntent; routes: Route[]; parser?: ProviderName; parserLabel?: string; notes: string[] }
+  | { ok: false; error: string; parser?: ProviderName; parserLabel?: string; notes: string[] };
 
 function revalidateAll() {
   for (const p of ['/', '/cards', '/offers', '/strategies']) revalidatePath(p);
@@ -35,7 +35,8 @@ export async function askAssistant(message: string): Promise<RoutesResult> {
   const text = message.trim();
   if (!text) return { ok: false, error: 'Tell me what you want to buy and roughly how much it costs.', notes: [] };
   const { kb } = await getKnowledgeBase();
-  const { parsed, parser, warning } = await parseIntent(text, kb);
+  const { parsed, provider: parser, warning } = await parseIntent(text, kb);
+  const parserLabel = parser === 'local' ? 'the local parser' : providerLabel();
   const notes: string[] = [];
   if (warning) notes.push(warning);
   const brand = parsed.brandQuery ? fuzzyBrand(kb, parsed.brandQuery) : undefined;
@@ -44,6 +45,7 @@ export async function askAssistant(message: string): Promise<RoutesResult> {
     return {
       ok: false,
       parser,
+      parserLabel,
       notes,
       error: parsed.brandQuery
         ? `I don't know "${parsed.brandQuery}" yet. Add it on the Offers page, or pick one of: ${known}.`
@@ -51,13 +53,19 @@ export async function askAssistant(message: string): Promise<RoutesResult> {
     };
   }
   if (!parsed.amount) {
-    return { ok: false, parser, notes, error: `How much is the bill at ${brand.name}?` };
+    return { ok: false, parser, parserLabel, notes, error: `How much is the bill at ${brand.name}?` };
   }
   const channel: Channel = parsed.channel ?? 'offline';
   if (!parsed.channel) notes.push('Assumed you are paying at a physical store; say "online" if not.');
   const intent = PurchaseIntentSchema.parse({ brandId: brand.id, amount: parsed.amount, channel, inStoreNow: parsed.inStoreNow });
   const routes = findRoutes(kb, intent);
-  return { ok: true, parser, brandName: brand.name, intent, routes, notes };
+  return { ok: true, parser, parserLabel, brandName: brand.name, intent, routes, notes };
+}
+
+/** Live web research (OpenAI web_search) for a brand's gift card and bank offers. */
+export async function lookupOffers(brandId: string): Promise<OfferSearchResult | OfferSearchFailure> {
+  const { kb } = await getKnowledgeBase();
+  return searchOffersOnline(brandId, kb);
 }
 
 // ---------- cards ----------
@@ -211,7 +219,8 @@ export async function addGiftCardOffer(formData: FormData): Promise<void> {
       maxAmount: num('maxAmount'),
       feePct: num('feePct') ?? 0,
       verifiedAt: today(),
-      sourceNote: 'Entered by user',
+      sourceUrl: String(formData.get('sourceUrl') ?? '').trim() || undefined,
+      sourceNote: String(formData.get('sourceNote') ?? '').trim() || 'Entered by user',
     });
   });
   revalidateAll();
@@ -263,7 +272,8 @@ export async function addMerchantOffer(formData: FormData): Promise<void> {
       code: String(formData.get('code') ?? '').trim() || undefined,
       validTill: String(formData.get('validTill') ?? '').trim() || undefined,
       verifiedAt: today(),
-      sourceNote: 'Entered by user',
+      sourceUrl: String(formData.get('sourceUrl') ?? '').trim() || undefined,
+      sourceNote: String(formData.get('sourceNote') ?? '').trim() || 'Entered by user',
     });
   });
   revalidateAll();
