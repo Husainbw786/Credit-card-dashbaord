@@ -1,4 +1,4 @@
-import type { CardProductInput } from '../types.js';
+import type { CardProductInput } from '../types';
 
 /**
  * Card products the user holds. Every rule carries a source and the date it was

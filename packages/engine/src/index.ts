@@ -1,5 +1,5 @@
-export * from './types.js';
-export * from './rewards.js';
-export * from './routes.js';
-export * from './format.js';
-export { loadKnowledgeBase, seedKnowledgeBase } from './data/index.js';
+export * from './types';
+export * from './rewards';
+export * from './routes';
+export * from './format';
+export { loadKnowledgeBase, seedKnowledgeBase } from './data/index';

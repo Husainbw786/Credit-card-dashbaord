@@ -1,4 +1,4 @@
-import type { MyCardInput } from '../types.js';
+import type { MyCardInput } from '../types';
 
 /** The user's wallet. capUsed is reward already earned this period, per cap group. */
 export const myCards: MyCardInput[] = [

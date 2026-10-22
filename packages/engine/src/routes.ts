@@ -1,4 +1,4 @@
-import { computeReward, pointValueFor, type Hop, type RewardResult } from './rewards.js';
+import { computeReward, pointValueFor, type Hop, type RewardResult } from './rewards';
 import type {
   Brand,
   CardProduct,
@@ -11,7 +11,7 @@ import type {
   Provenance,
   PurchaseIntent,
   Strategy,
-} from './types.js';
+} from './types';
 
 export type Severity = 'info' | 'medium' | 'low';
 export interface Catch {

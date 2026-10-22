@@ -1,4 +1,4 @@
-import type { CardProduct, Category, Channel, MyCard, RewardRule } from './types.js';
+import type { CardProduct, Category, Channel, MyCard, RewardRule } from './types';
 
 /** One place where a card gets charged. */
 export interface Hop {

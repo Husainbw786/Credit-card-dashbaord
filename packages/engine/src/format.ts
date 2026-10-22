@@ -1,5 +1,5 @@
-import { fmtInr, type Route } from './routes.js';
-import type { KnowledgeBase, PurchaseIntent } from './types.js';
+import { fmtInr, type Route } from './routes';
+import type { KnowledgeBase, PurchaseIntent } from './types';
 
 const badge: Record<Route['confidence'], string> = { high: 'HIGH', medium: 'MEDIUM', low: 'LOW' };
 

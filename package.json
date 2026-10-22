@@ -7,8 +7,11 @@
     "apps/*"
   ],
   "scripts": {
+    "dev": "npm run dev -w @smart-spend/web",
+    "build": "npm run build -w @smart-spend/web",
+    "start": "npm run start -w @smart-spend/web",
     "test": "npm run test -w @smart-spend/engine",
-    "typecheck": "npm run typecheck -w @smart-spend/engine",
+    "typecheck": "npm run typecheck -w @smart-spend/engine && npm run typecheck -w @smart-spend/web",
     "route": "npm run route -w @smart-spend/engine --"
   }
 }

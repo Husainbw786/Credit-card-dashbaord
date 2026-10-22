@@ -1,4 +1,4 @@
-import type { BrandInput } from '../types.js';
+import type { BrandInput } from '../types';
 
 const CHECKED = '2026-10-22';
 

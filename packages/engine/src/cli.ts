@@ -1,8 +1,8 @@
 import { parseArgs } from 'node:util';
-import { loadKnowledgeBase } from './data/index.js';
-import { formatRoutes } from './format.js';
-import { findRoutes, resolveBrand } from './routes.js';
-import { PurchaseIntentSchema } from './types.js';
+import { loadKnowledgeBase } from './data/index';
+import { formatRoutes } from './format';
+import { findRoutes, resolveBrand } from './routes';
+import { PurchaseIntentSchema } from './types';
 
 const { values } = parseArgs({
   options: {

@@ -1,4 +1,4 @@
-import type { PlatformInput } from '../types.js';
+import type { PlatformInput } from '../types';
 
 /** Places that sell gift cards or vouchers. Discounts live in offers.ts, per brand. */
 export const platforms: PlatformInput[] = [

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { loadKnowledgeBase } from '../src/data/index.js';
-import { computeReward } from '../src/rewards.js';
-import { coverWithDenominations, findRoutes } from '../src/routes.js';
-import type { KnowledgeBase } from '../src/types.js';
+import { loadKnowledgeBase } from '../src/data/index';
+import { computeReward } from '../src/rewards';
+import { coverWithDenominations, findRoutes } from '../src/routes';
+import type { KnowledgeBase } from '../src/types';
 
 const TODAY = '2026-10-22';
 

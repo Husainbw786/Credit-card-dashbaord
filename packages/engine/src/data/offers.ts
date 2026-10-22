@@ -1,4 +1,4 @@
-import type { GiftCardOfferInput, MerchantOfferInput, PlatformCardBonusInput } from '../types.js';
+import type { GiftCardOfferInput, MerchantOfferInput, PlatformCardBonusInput } from '../types';
 
 /**
  * Live discounts. Only values with a known source are seeded; add a row per

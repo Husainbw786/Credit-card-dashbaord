@@ -258,7 +258,13 @@ Deliverable: offers and perks stay current without you re-typing them.
   enumeration, seed data for the user's seven cards, 15 tests (Giva example, caps,
   exclusions, platform comparison, denominations) and the CLI.
 - Research notes and open questions per card: `packages/engine/SOURCES.md`.
-- Next: Phase 1 (Next.js app with card wallet, assistant, strategies, offers).
+- **Phase 1: done.** `apps/web` is a Next.js 15 app with the shop assistant (free
+  text parsed by Claude when a key is set, local parser otherwise, plus a structured
+  form), route cards with steps, catches, confidence and math, a cards page with cap
+  and flag tracking and a catalogue, an offers page for gift card and merchant offers
+  and brands, and a strategies page. State is a JSON file for now (Postgres in Phase 2).
+- Next: Phase 2 (scheduled discount fetching, LLM extraction of card terms,
+  transaction log, hosted database).
 
 ## 8. What I need from you
 

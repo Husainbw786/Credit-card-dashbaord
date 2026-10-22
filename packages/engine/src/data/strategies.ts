@@ -1,4 +1,4 @@
-import type { StrategyInput } from '../types.js';
+import type { StrategyInput } from '../types';
 
 /** Payment patterns the engine enumerates. Variation 1 = gift_card. */
 export const strategies: StrategyInput[] = [
