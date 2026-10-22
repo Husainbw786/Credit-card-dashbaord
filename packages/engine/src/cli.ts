@@ -10,9 +10,10 @@ const { values } = parseArgs({
     amount: { type: 'string', short: 'a' },
     channel: { type: 'string', short: 'c', default: 'offline' },
     'in-store': { type: 'boolean', default: false },
-    top: { type: 'string', short: 't', default: '5' },
+    top: { type: 'string', short: 't', default: '4' },
     json: { type: 'boolean', default: false },
     'list-brands': { type: 'boolean', default: false },
+    'all-cards': { type: 'boolean', default: false },
     help: { type: 'boolean', short: 'h', default: false },
   },
 });
@@ -20,7 +21,7 @@ const { values } = parseArgs({
 const kb = loadKnowledgeBase();
 
 if (values.help || (!values.brand && !values['list-brands'])) {
-  console.log(`Usage: npm run route -- --brand giva --amount 10000 [--channel offline|online|upi] [--in-store] [--top 5] [--json]
+  console.log(`Usage: npm run route -- --brand giva --amount 10000 [--channel offline|online|upi] [--in-store] [--top 4] [--all-cards] [--json]
        npm run route -- --list-brands`);
   process.exit(values.help ? 0 : 1);
 }
@@ -44,6 +45,19 @@ if (!Number.isFinite(amount) || amount <= 0) {
   process.exit(1);
 }
 const intent = PurchaseIntentSchema.parse({ brandId: brand.id, amount, channel: values.channel, inStoreNow: values['in-store'] });
-const routes = findRoutes(kb, intent, { topN: Number(values.top) || undefined });
-if (values.json) console.log(JSON.stringify({ intent, routes }, null, 2));
-else console.log(formatRoutes(kb, intent, routes));
+const all = findRoutes(kb, intent);
+const top = Number(values.top) || undefined;
+if (values.json) console.log(JSON.stringify({ intent, routes: all }, null, 2));
+else if (values['all-cards']) console.log(formatRoutes(kb, intent, top ? all.slice(0, top) : all, { allCards: true }));
+else {
+  // Keep the top N options (grouped by platform / direct), not the top N card variations.
+  const keep = new Set<string>();
+  const kept = all.filter((r) => {
+    const g = r.strategyId === 'gift_card' ? `gc:${r.platformId}` : `direct:${r.offerId ?? ''}`;
+    if (keep.has(g)) return true;
+    if (top && keep.size >= top) return false;
+    keep.add(g);
+    return true;
+  });
+  console.log(formatRoutes(kb, intent, kept));
+}

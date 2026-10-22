@@ -45,7 +45,8 @@ export function ShopAssistant({ brands, platforms, cards, searchAvailable, provi
     });
   }
 
-  const visible = result?.ok ? (showAll ? result.routes : result.routes.slice(0, 3)) : [];
+  const TOP = 4;
+  const visible = result?.ok ? (showAll ? result.groups : result.groups.slice(0, TOP)) : [];
 
   return (
     <div className="space-y-4">
@@ -133,12 +134,12 @@ export function ShopAssistant({ brands, platforms, cards, searchAvailable, provi
             {result.parserLabel && <Muted>Parsed by {result.parserLabel}.</Muted>}
           </div>
           {visible.length === 0 && <Muted>No routes found. Add a gift card offer or a card first.</Muted>}
-          {visible.map((r, i) => (
-            <RouteCard key={r.id} route={r} rank={i + 1} />
+          {visible.map((g, i) => (
+            <RouteCard key={g.key} route={g.best} rank={i + 1} alternatives={g.alternatives} />
           ))}
-          {result.routes.length > 3 && (
+          {result.groups.length > TOP && (
             <Button variant="secondary" type="button" onClick={() => setShowAll((v) => !v)} className="w-full">
-              {showAll ? 'Show top 3 only' : `Show all ${result.routes.length} routes`}
+              {showAll ? `Show top ${TOP} only` : `Show ${result.groups.length - TOP} more option${result.groups.length - TOP === 1 ? '' : 's'}`}
             </Button>
           )}
           {!result.routes.some((r) => r.strategyId === 'gift_card') && <Muted>No gift card discount is known for {result.brandName} yet. Search the web below or add one on the Offers page.</Muted>}

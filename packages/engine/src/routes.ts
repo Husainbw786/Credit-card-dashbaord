@@ -37,6 +37,8 @@ export interface Route {
   cardId: string;
   cardName: string;
   platformId?: string;
+  /** Merchant offer applied on a direct route, if any. */
+  offerId?: string;
   steps: RouteStep[];
   billAmount: number;
   /** Cash that leaves your card(s). */
@@ -216,6 +218,7 @@ function buildDirect(ctx: Ctx, strategy: Strategy, my: MyCard, card: CardProduct
     title: `Pay ${brand.name} directly with ${card.name}${via}${offer ? ` + ${offer.pct}% ${offer.kind} offer` : ''}`,
     cardId: my.id,
     cardName: card.name,
+    offerId: offer?.id,
     steps,
     billAmount: bill,
     youPay: pay,
@@ -464,6 +467,31 @@ export function findRoutes(kb: KnowledgeBase, intent: PurchaseIntent, opts: Find
       a.title.localeCompare(b.title),
   );
   return opts.topN ? routes.slice(0, opts.topN) : routes;
+}
+
+/** One way to pay (a platform, or paying directly, with or without an offer) with its best card first. */
+export interface RouteGroup {
+  key: string;
+  best: Route;
+  /** Same option with the other cards, best first. */
+  alternatives: Route[];
+}
+
+export function groupKey(r: Route): string {
+  if (r.strategyId === 'gift_card') return `gc:${r.platformId ?? ''}`;
+  return `direct:${r.offerId ?? ''}`;
+}
+
+/** Collapse per-card variations of the same option. Input must be sorted best-first. */
+export function groupRoutes(routes: Route[]): RouteGroup[] {
+  const groups = new Map<string, RouteGroup>();
+  for (const r of routes) {
+    const key = groupKey(r);
+    const g = groups.get(key);
+    if (g) g.alternatives.push(r);
+    else groups.set(key, { key, best: r, alternatives: [] });
+  }
+  return [...groups.values()];
 }
 
 /** Find a brand by id, name, or alias (case-insensitive). */

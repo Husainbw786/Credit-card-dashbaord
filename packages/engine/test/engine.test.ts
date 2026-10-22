@@ -212,3 +212,17 @@ describe('unknown-discount catalogue rows', () => {
     expect(routes).toHaveLength(14);
   });
 });
+
+describe('grouping per-card variations', () => {
+  it('collapses Giva routes into one gift card option and one direct option, best card first', async () => {
+    const { groupRoutes } = await import('../src/routes');
+    const kb = loadKnowledgeBase();
+    const routes = findRoutes(kb, { brandId: 'giva', amount: 10_000, channel: 'offline', inStoreNow: false }, { today: TODAY });
+    const groups = groupRoutes(routes);
+    expect(groups.map((g) => g.key)).toEqual(['gc:gyftr', 'direct:']);
+    expect(groups[0]!.best.cardId).toBe('my-sbi-cashback');
+    expect(groups[0]!.alternatives).toHaveLength(6);
+    expect(groups[0]!.alternatives[0]!.cardId).toBe('my-sbi-simplyclick');
+    expect(groups[1]!.alternatives).toHaveLength(6);
+  });
+});

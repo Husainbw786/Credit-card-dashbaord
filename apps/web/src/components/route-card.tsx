@@ -8,7 +8,7 @@ const dot: Record<Route['catches'][number]['severity'], string> = {
   low: 'bg-red-500',
 };
 
-export function RouteCard({ route, rank }: { route: Route; rank: number }) {
+export function RouteCard({ route, rank, alternatives = [] }: { route: Route; rank: number; alternatives?: Route[] }) {
   const best = rank === 1;
   return (
     <article className={`rounded-xl border p-4 shadow-sm ${best ? 'border-emerald-400 bg-emerald-50/40 dark:border-emerald-700 dark:bg-emerald-950/20' : 'border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900'}`}>
@@ -40,6 +40,18 @@ export function RouteCard({ route, rank }: { route: Route; rank: number }) {
           </li>
         ))}
       </ol>
+
+      {alternatives.length > 0 && (
+        <p className="mt-3 text-xs text-zinc-600 dark:text-zinc-300">
+          <span className="font-medium">Same option with other cards:</span>{' '}
+          {alternatives.map((a, i) => (
+            <span key={a.id}>
+              {i > 0 && ' · '}
+              {a.cardName} <span className="tabular-nums">{inr(a.effectiveCost)}</span>
+            </span>
+          ))}
+        </p>
+      )}
 
       {route.catches.length > 0 && (
         <ul className="mt-4 space-y-1">

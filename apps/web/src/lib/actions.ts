@@ -4,17 +4,19 @@ import { revalidatePath } from 'next/cache';
 import {
   PurchaseIntentSchema,
   findRoutes,
+  groupRoutes,
   type Category,
   type Channel,
   type PurchaseIntent,
   type Route,
+  type RouteGroup,
 } from '@smart-spend/engine';
 import { activeProvider, fuzzyBrand, parseIntent, providerLabel, searchOffersOnline, type OfferSearchFailure, type OfferSearchResult, type ProviderName } from './llm';
 import { getKnowledgeBase } from './kb';
 import { slug, today, updateState } from './store';
 
 export type RoutesResult =
-  | { ok: true; brandName: string; intent: PurchaseIntent; routes: Route[]; parser?: ProviderName; parserLabel?: string; notes: string[] }
+  | { ok: true; brandName: string; intent: PurchaseIntent; routes: Route[]; groups: RouteGroup[]; parser?: ProviderName; parserLabel?: string; notes: string[] }
   | { ok: false; error: string; parser?: ProviderName; parserLabel?: string; notes: string[] };
 
 const ONLINE_ONLY_CATEGORIES = new Set<Category>(['food_delivery', 'travel']);
@@ -30,7 +32,7 @@ export async function computeRoutes(input: { brandId: string; amount: number; ch
   const parsed = PurchaseIntentSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'Enter a positive amount.', notes: [] };
   const routes = findRoutes(kb, parsed.data);
-  return { ok: true, brandName: brand.name, intent: parsed.data, routes, notes: [] };
+  return { ok: true, brandName: brand.name, intent: parsed.data, routes, groups: groupRoutes(routes), notes: [] };
 }
 
 export async function askAssistant(message: string): Promise<RoutesResult> {
@@ -79,7 +81,7 @@ export async function askAssistant(message: string): Promise<RoutesResult> {
   notes.push(...searched.notes);
   const latest = searched.refreshed ? (await getKnowledgeBase()).kb : kb;
   const routes = findRoutes(latest, intent);
-  return { ok: true, parser, parserLabel, brandName: brand.name, intent, routes, notes };
+  return { ok: true, parser, parserLabel, brandName: brand.name, intent, routes, groups: groupRoutes(routes), notes };
 }
 
 const FRESH_DAYS = 7;
