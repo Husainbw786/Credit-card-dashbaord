@@ -1,0 +1,14 @@
+{
+  "name": "smart-spend",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "test": "npm run test -w @smart-spend/engine",
+    "typecheck": "npm run typecheck -w @smart-spend/engine",
+    "route": "npm run route -w @smart-spend/engine --"
+  }
+}

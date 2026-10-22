@@ -252,7 +252,15 @@ Deliverable: offers and perks stay current without you re-typing them.
 
 ---
 
-## 7. What I need from you (not blocking Phase 0)
+## 7. Status
+
+- **Phase 0: done.** `packages/engine` holds the schemas, reward engine, route
+  enumeration, seed data for the user's seven cards, 15 tests (Giva example, caps,
+  exclusions, platform comparison, denominations) and the CLI.
+- Research notes and open questions per card: `packages/engine/SOURCES.md`.
+- Next: Phase 1 (Next.js app with card wallet, assistant, strategies, offers).
+
+## 8. What I need from you
 
 1. The list of cards you hold (issuer + variant).
 2. Variations 2 and 3, in the same "suppose I want to buy… I would…" form as the Giva
